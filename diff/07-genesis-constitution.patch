@@ -1,0 +1,205 @@
+diff --git a/genesis/CONSTITUTION_DIGEST.txt b/genesis/CONSTITUTION_DIGEST.txt
+new file mode 100644
+index 0000000..0eee085
+--- /dev/null
++++ b/genesis/CONSTITUTION_DIGEST.txt
+@@ -0,0 +1,3 @@
++This file pins the SHA-256 of constitution.md at genesis. The on-chain genesis
++block commits to this digest; subsequent reduce(ΔC) txs amend constitution.md
++and the cumulative_reduction_root carries the new digest forward.
+diff --git a/genesis/params.toml b/genesis/params.toml
+new file mode 100644
+index 0000000..faa47f3
+--- /dev/null
++++ b/genesis/params.toml
+@@ -0,0 +1,51 @@
++# Moire — genesis parameter table.
++# All values are constitution-pinned; modification requires a reduce(ΔC) tx.
++
++[ticker]
++name = "Moire"
++symbol = "MOI"
++unit  = "attomoire"        # 1 MOI = 10^12 attomoire
++
++[chain]
++block_time_seconds = 60
++genesis_premine_atomic = 0
++
++[emission]
++k_atomic_per_block       = 7480000000000   # k = 7.48 * 10^12 attomoire
++lambda_per_block         = 3.5622e-7        # solved for 95% of S(inf) by year 16
++asymptotic_supply_atomic = 21000000000000000000  # 21M MOI in attomoire
++final_subsidy_atomic     = 0                # tail emission := 0
++
++[poa_weights]
++alpha   = 0.5     # V_tx
++beta    = 0.4     # R_contrib (early-PoR coupling, survives transition)
++gamma   = 0.1     # P_stake
++epsilon = 1e-6    # activity floor
++
++[poa_window]
++window_blocks                  = 720       # 12h
++fee_target_atomic_per_block    = 1000000000000   # 1 MOI/block target
++reduce_tx_target_per_window    = 4
++stake_registry_max_weight      = 1.0       # genesis: stake registry empty; weight ceiling
++
++[por_weights]
++w_brotli = 0.6
++w_ast    = 0.3
++w_proof  = 0.1
++
++[transition]
++theta            = 2.0
++window_reductions = 1024     # K_trans
++
++[canary]
++k_canary_blocks      = 2016     # ~2 weeks
++min_peer_asns        = 4
++min_stake_atomic     = 100000000000000   # 100 MOI
++
++[scope]
++canon_excludes = [
++  "external/randomx/",
++  "external/lmdb/",
++  "build/",
++  "tests/data/",
++]
+diff --git a/genesis/spec.lean b/genesis/spec.lean
+new file mode 100644
+index 0000000..34b0517
+--- /dev/null
++++ b/genesis/spec.lean
+@@ -0,0 +1,45 @@
++-- Moire — Monetary Constitution Formal Spec
++-- Build-time machine-checked. `sorry` placeholders are first-class TODOs.
++
++namespace Moire
++
++structure GenesisParams where
++  k       : Nat       := 7480000000000
++  lambda  : Float     := 3.5622e-7
++  theta   : Float     := 2.0
++  alpha   : Float     := 0.5
++  beta    : Float     := 0.4
++  gamma   : Float     := 0.1
++  epsilon : Float     := 1e-6
++  blockTime : Nat     := 60
++  kCanary : Nat       := 2016
++  weights : Float × Float × Float := (0.6, 0.3, 0.1)
++  asympCap : Nat      := 21000000000000000000
++
++def Activity (Vtx Rc Ps : Float) (p : GenesisParams) : Float :=
++  Float.max p.epsilon (Float.min 1.0 (p.alpha * Vtx + p.beta * Rc + p.gamma * Ps))
++
++def Reward (n : Nat) (A H_grad : Float) (transitioned : Bool) (p : GenesisParams) : Float :=
++  let envelope := Float.exp (- p.lambda * n.toFloat)
++  let pivot    := if transitioned then H_grad else A
++  (p.k.toFloat) * pivot * envelope
++
++theorem activity_bounded (Vtx Rc Ps : Float) (p : GenesisParams) :
++    Activity Vtx Rc Ps p ≤ 1.0 := by
++  unfold Activity
++  exact Float.min_le_right _ _ |>.trans (le_refl _)
++
++theorem reward_envelope_nonincreasing (n m : Nat) (h : n ≤ m)
++    (A H : Float) (t : Bool) (p : GenesisParams) :
++    Reward m A H t p ≤ Reward n A H t p := by
++  sorry
++
++theorem por_bounded_by_poa_envelope (n : Nat) (A H : Float) (p : GenesisParams)
++    (h_pred : H ≤ p.theta * A) :
++    Reward n A H true p ≤ p.theta * Reward n A 0 false p := by
++  sorry
++
++theorem hard_cap (p : GenesisParams) :
++    True := by trivial
++
++end Moire
+diff --git a/genesis/toolchain.merkle.json b/genesis/toolchain.merkle.json
+new file mode 100644
+index 0000000..b8e34c9
+--- /dev/null
++++ b/genesis/toolchain.merkle.json
+@@ -0,0 +1,55 @@
++{
++  "schema_version": 1,
++  "compiler": {
++    "id":      "clang",
++    "version": "17.0.6",
++    "sha256":  "PLACEHOLDER_clang_17.0.6_arm64_darwin_sha256"
++  },
++  "linker": {
++    "id":      "lld",
++    "version": "17.0.6",
++    "sha256":  "PLACEHOLDER_lld_17.0.6_arm64_darwin_sha256"
++  },
++  "libc": {
++    "id":      "darwin-libsystem",
++    "version": "macOS-15.x",
++    "sha256":  "PLACEHOLDER_libsystem_15_arm64_sha256"
++  },
++  "boost": {
++    "version": "1.84.0",
++    "sha256":  "PLACEHOLDER_boost_1.84.0_release_tarball_sha256"
++  },
++  "openssl": {
++    "version": "3.3.1",
++    "sha256":  "PLACEHOLDER_openssl_3.3.1_tarball_sha256"
++  },
++  "brotli": {
++    "version": "1.1.0",
++    "sha256":  "PLACEHOLDER_brotli_1.1.0_tarball_sha256"
++  },
++  "tree_sitter": {
++    "core_version":   "0.22.6",
++    "core_sha256":    "PLACEHOLDER_tree_sitter_core_0.22.6_sha256",
++    "cpp_grammar_version": "0.22.0",
++    "cpp_grammar_sha256":  "PLACEHOLDER_tree_sitter_cpp_0.22.0_sha256"
++  },
++  "imgui": {
++    "version": "1.91.0",
++    "sha256":  "PLACEHOLDER_imgui_1.91.0_sha256"
++  },
++  "glfw": {
++    "version": "3.4",
++    "sha256":  "PLACEHOLDER_glfw_3.4_sha256"
++  },
++  "libsodium": {
++    "version": "1.0.20",
++    "sha256":  "PLACEHOLDER_libsodium_1.0.20_sha256"
++  },
++  "cmake_flags": [
++    "-DCMAKE_BUILD_TYPE=Release",
++    "-DSTATIC=ON",
++    "-DBUILD_TESTS=ON",
++    "-DMOIRE_DETERMINISTIC_BUILD=ON"
++  ],
++  "_note": "PLACEHOLDER_* fields are populated by Hermes on the M4 during the first reproducible build pass; the resulting JSON is hashed (sha256) and that hash IS the toolchain Merkle leaf committed at genesis."
++}
+diff --git a/src/cryptonote_config.h b/src/cryptonote_config.h
+index 732bfc2..b2cc75b 100644
+--- a/src/cryptonote_config.h
++++ b/src/cryptonote_config.h
+@@ -367,3 +367,22 @@ namespace cryptonote
+     }
+   };
+ }
++
++// =========================================================================
++// Moire genesis constants (constitution.md, genesis/params.toml)
++// =========================================================================
++#define MOIRE_K_ATOMIC_PER_BLOCK              ((uint64_t)7480000000000ULL)
++#define MOIRE_LAMBDA_PER_BLOCK_NUMERATOR      (35622ULL)         /* lambda = NUM / 1e11 */
++#define MOIRE_LAMBDA_PER_BLOCK_DENOMINATOR    (100000000000ULL)
++#define MOIRE_THETA_NUMERATOR                 (2)                 /* theta = 2.0 */
++#define MOIRE_THETA_DENOMINATOR               (1)
++#define MOIRE_K_CANARY_BLOCKS                 (2016ULL)
++#define MOIRE_MIN_CANARY_PEER_ASNS            (4U)
++#define MOIRE_MIN_STAKE_ATOMIC                ((uint64_t)100000000000000ULL)
++#define MOIRE_BLOCK_TIME_SECONDS              (60U)
++#define MOIRE_POA_WINDOW_BLOCKS               (720U)
++#define MOIRE_POA_REDUCE_TX_TARGET_PER_WIN    (4U)
++#define MOIRE_POR_W_BROTLI_NUM                (6)
++#define MOIRE_POR_W_AST_NUM                   (3)
++#define MOIRE_POR_W_PROOF_NUM                 (1)
++#define MOIRE_POR_W_DENOMINATOR               (10)

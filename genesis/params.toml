@@ -1,0 +1,51 @@
+# Moire — genesis parameter table.
+# All values are constitution-pinned; modification requires a reduce(ΔC) tx.
+
+[ticker]
+name = "Moire"
+symbol = "MOI"
+unit  = "attomoire"        # 1 MOI = 10^12 attomoire
+
+[chain]
+block_time_seconds = 60
+genesis_premine_atomic = 0
+
+[emission]
+k_atomic_per_block       = 7480000000000   # k = 7.48 * 10^12 attomoire
+lambda_per_block         = 3.5622e-7        # solved for 95% of S(inf) by year 16
+asymptotic_supply_atomic = 21000000000000000000  # 21M MOI in attomoire
+final_subsidy_atomic     = 0                # tail emission := 0
+
+[poa_weights]
+alpha   = 0.5     # V_tx
+beta    = 0.4     # R_contrib (early-PoR coupling, survives transition)
+gamma   = 0.1     # P_stake
+epsilon = 1e-6    # activity floor
+
+[poa_window]
+window_blocks                  = 720       # 12h
+fee_target_atomic_per_block    = 1000000000000   # 1 MOI/block target
+reduce_tx_target_per_window    = 4
+stake_registry_max_weight      = 1.0       # genesis: stake registry empty; weight ceiling
+
+[por_weights]
+w_brotli = 0.6
+w_ast    = 0.3
+w_proof  = 0.1
+
+[transition]
+theta            = 2.0
+window_reductions = 1024     # K_trans
+
+[canary]
+k_canary_blocks      = 2016     # ~2 weeks
+min_peer_asns        = 4
+min_stake_atomic     = 100000000000000   # 100 MOI
+
+[scope]
+canon_excludes = [
+  "external/randomx/",
+  "external/lmdb/",
+  "build/",
+  "tests/data/",
+]

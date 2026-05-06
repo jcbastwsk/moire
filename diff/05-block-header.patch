@@ -1,0 +1,31 @@
+diff --git a/src/cryptonote_basic/cryptonote_basic.h b/src/cryptonote_basic/cryptonote_basic.h
+index ff1b24b..45d3589 100644
+--- a/src/cryptonote_basic/cryptonote_basic.h
++++ b/src/cryptonote_basic/cryptonote_basic.h
+@@ -481,6 +481,8 @@ namespace cryptonote
+   /************************************************************************/
+   /*                                                                      */
+   /************************************************************************/
++  // Moire: block_header extended with cumulative reduction root + activity ledger hash.
++  // Both fields participate in the PoW input (see get_block_hashing_blob).
+   struct block_header
+   {
+     uint8_t major_version;
+@@ -488,6 +490,8 @@ namespace cryptonote
+     uint64_t timestamp;
+     crypto::hash  prev_id;
+     uint32_t nonce;
++    crypto::hash cumulative_reduction_root;  // Moire: Merkle root of all accepted reduce(ΔC) txs
++    crypto::hash activity_ledger_hash;       // Moire: hash of A(B_n) ledger snapshot at this height
+ 
+     BEGIN_SERIALIZE()
+       VARINT_FIELD(major_version)
+@@ -495,6 +499,8 @@ namespace cryptonote
+       VARINT_FIELD(timestamp)
+       FIELD(prev_id)
+       FIELD(nonce)
++      FIELD(cumulative_reduction_root)
++      FIELD(activity_ledger_hash)
+     END_SERIALIZE()
+   };
+ 

@@ -1,0 +1,120 @@
+diff --git a/src/cryptonote_basic/cryptonote_basic.h b/src/cryptonote_basic/cryptonote_basic.h
+index 45d3589..15b5077 100644
+--- a/src/cryptonote_basic/cryptonote_basic.h
++++ b/src/cryptonote_basic/cryptonote_basic.h
+@@ -148,8 +148,33 @@ namespace cryptonote
+     END_SERIALIZE()
+   };
+ 
++  // Moire: reduce(ΔC) transaction input. Carries patch metadata; non-value-transfer.
++  // See constitution.md Article V and DESIGN.md §8 for canary-then-promote semantics.
++  struct txin_reduce
++  {
++    crypto::hash      parent_codebase_hash;     // must equal cumulative_reduction_root at canary_window_start - 1
++    crypto::hash      child_codebase_hash;
++    crypto::hash      patch_blob_hash;          // canonical patch bytes retrievable via gossip
++    int64_t           entropy_delta_signed;     // ΔH; must be > 0
++    crypto::public_key issuer_pubkey;
++    crypto::signature  issuer_signature;        // signs the other fields
++    uint64_t          staked_credit_atomic;     // burnt on canary failure (attomoire)
++    uint64_t          canary_window_start;      // height
++
++    BEGIN_SERIALIZE_OBJECT()
++      FIELD(parent_codebase_hash)
++      FIELD(child_codebase_hash)
++      FIELD(patch_blob_hash)
++      VARINT_FIELD(entropy_delta_signed)
++      FIELD(issuer_pubkey)
++      FIELD(issuer_signature)
++      VARINT_FIELD(staked_credit_atomic)
++      VARINT_FIELD(canary_window_start)
++    END_SERIALIZE()
++  };
++
+ 
+-  typedef boost::variant<txin_gen, txin_to_script, txin_to_scripthash, txin_to_key> txin_v;
++  typedef boost::variant<txin_gen, txin_to_script, txin_to_scripthash, txin_to_key, txin_reduce> txin_v;
+ 
+   typedef boost::variant<txout_to_script, txout_to_scripthash, txout_to_key> txout_target_v;
+ 
+diff --git a/src/cryptonote_core/CMakeLists.txt b/src/cryptonote_core/CMakeLists.txt
+index 2015f48..5846cf9 100644
+--- a/src/cryptonote_core/CMakeLists.txt
++++ b/src/cryptonote_core/CMakeLists.txt
+@@ -28,6 +28,7 @@
+ 
+ # Moire: PoA oracle (patch 03)
+ set(cryptonote_core_sources
++  reduce_tx.cpp
+   por_oracle.cpp
+   poa_oracle.cpp
+   blockchain.cpp
+diff --git a/src/cryptonote_core/reduce_tx.cpp b/src/cryptonote_core/reduce_tx.cpp
+new file mode 100644
+index 0000000..00dcc3b
+--- /dev/null
++++ b/src/cryptonote_core/reduce_tx.cpp
+@@ -0,0 +1,24 @@
++// Moire — reduce(ΔC) canary state machine implementation.
++#include "reduce_tx.h"
++
++#include <cstring>
++
++namespace moire {
++
++bool reduce_tx_admissible(const reduce_tx_state& /*st*/,
++                          const crypto::hash& /*current_cumulative_root*/) noexcept {
++  // Day-1 stub: signature/parent-hash check happens in cryptonote_core::check_tx_inputs.
++  // Return true here; the full predicate runs there once the integration sweep is done.
++  return true;
++}
++
++bool reduce_tx_promotable(const reduce_tx_state& st, uint64_t current_height) noexcept {
++  if (st.status != canary_status::pending) return false;
++  if (current_height < st.canary_window_start + K_CANARY_BLOCKS) return false;
++  if (st.consensus_divergence) return false;
++  if (!st.invariants_passed_continuously) return false;
++  if (st.observed_peer_asns < MIN_CANARY_PEER_ASNS) return false;
++  return true;
++}
++
++}  // namespace moire
+diff --git a/src/cryptonote_core/reduce_tx.h b/src/cryptonote_core/reduce_tx.h
+new file mode 100644
+index 0000000..b98784f
+--- /dev/null
++++ b/src/cryptonote_core/reduce_tx.h
+@@ -0,0 +1,33 @@
++// Moire — reduce(ΔC) tx canary-then-promote state machine.
++// Constitution Articles V, VI, VIII.
++#pragma once
++
++#include <cstdint>
++#include "crypto/crypto.h"
++
++namespace moire {
++
++constexpr uint64_t K_CANARY_BLOCKS = 2016;             // ~2 weeks @ 60s
++constexpr uint32_t MIN_CANARY_PEER_ASNS = 4;
++constexpr uint64_t MIN_STAKE_ATOMIC = 100000000000000ULL;  // 100 MOI in attomoire
++
++enum class canary_status : uint8_t {
++  pending  = 0,
++  promoted = 1,
++  reverted = 2,
++};
++
++struct reduce_tx_state {
++  crypto::hash patch_blob_hash;
++  uint64_t     canary_window_start;
++  uint32_t     observed_peer_asns;
++  bool         consensus_divergence;
++  bool         invariants_passed_continuously;
++  canary_status status;
++};
++
++bool reduce_tx_admissible(const reduce_tx_state& st,
++                          const crypto::hash& current_cumulative_root) noexcept;
++bool reduce_tx_promotable(const reduce_tx_state& st, uint64_t current_height) noexcept;
++
++}  // namespace moire

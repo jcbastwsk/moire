@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "compiler": {
+    "id":      "clang",
+    "version": "17.0.6",
+    "sha256":  "PLACEHOLDER_clang_17.0.6_arm64_darwin_sha256"
+  },
+  "linker": {
+    "id":      "lld",
+    "version": "17.0.6",
+    "sha256":  "PLACEHOLDER_lld_17.0.6_arm64_darwin_sha256"
+  },
+  "libc": {
+    "id":      "darwin-libsystem",
+    "version": "macOS-15.x",
+    "sha256":  "PLACEHOLDER_libsystem_15_arm64_sha256"
+  },
+  "boost": {
+    "version": "1.84.0",
+    "sha256":  "PLACEHOLDER_boost_1.84.0_release_tarball_sha256"
+  },
+  "openssl": {
+    "version": "3.3.1",
+    "sha256":  "PLACEHOLDER_openssl_3.3.1_tarball_sha256"
+  },
+  "brotli": {
+    "version": "1.1.0",
+    "sha256":  "PLACEHOLDER_brotli_1.1.0_tarball_sha256"
+  },
+  "tree_sitter": {
+    "core_version":   "0.22.6",
+    "core_sha256":    "PLACEHOLDER_tree_sitter_core_0.22.6_sha256",
+    "cpp_grammar_version": "0.22.0",
+    "cpp_grammar_sha256":  "PLACEHOLDER_tree_sitter_cpp_0.22.0_sha256"
+  },
+  "cmake_flags": [
+    "-DCMAKE_BUILD_TYPE=Release",
+    "-DSTATIC=ON",
+    "-DBUILD_TESTS=ON",
+    "-DMOIRE_DETERMINISTIC_BUILD=ON"
+  ],
+  "_note": "PLACEHOLDER_* fields are populated by Hermes on the M4 during the first reproducible build pass. Compute leaf := sha256(JSON minified, sorted-keys). That hash IS the toolchain Merkle leaf committed at genesis. Subsequent toolchain bumps ride on reduce(ΔC) txs."
+}

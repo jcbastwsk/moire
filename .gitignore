@@ -1,0 +1,23 @@
+# Build artifacts
+build/
+monero-src/
+*.o
+*.obj
+*.so
+*.dylib
+*.a
+*.dSYM/
+
+# OS / editor
+.DS_Store
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Local state
+*.log
+*.pid
+
+# Don't commit toolchain placeholder hashes once populated by Hermes;
+# but DO commit the manifest itself. (genesis/toolchain.merkle.json IS committed.)

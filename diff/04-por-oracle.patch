@@ -1,0 +1,137 @@
+diff --git a/src/cryptonote_core/CMakeLists.txt b/src/cryptonote_core/CMakeLists.txt
+index 794ec48..2015f48 100644
+--- a/src/cryptonote_core/CMakeLists.txt
++++ b/src/cryptonote_core/CMakeLists.txt
+@@ -28,6 +28,7 @@
+ 
+ # Moire: PoA oracle (patch 03)
+ set(cryptonote_core_sources
++  por_oracle.cpp
+   poa_oracle.cpp
+   blockchain.cpp
+   cryptonote_core.cpp
+diff --git a/src/cryptonote_core/por_oracle.cpp b/src/cryptonote_core/por_oracle.cpp
+new file mode 100644
+index 0000000..07d5e66
+--- /dev/null
++++ b/src/cryptonote_core/por_oracle.cpp
+@@ -0,0 +1,62 @@
++// Moire — Proof-of-Reduction oracle implementation.
++//
++// Out of scope on Day 1 (Hermes finishes on M4):
++//   * Brotli encoder integration (link to libbrotli; pinned hash in toolchain.merkle.json).
++//   * tree-sitter C++ parser integration (vendor as submodule; pinned hash).
++//   * Canonical source-tree serializer (file order, whitespace strip, line endings).
++//
++// What is implemented here:
++//   * Pure arithmetic over a precomputed codebase_snapshot.
++//   * Transition predicate.
++//   * Cumulative root extension (Merkle).
++//
++// The oracle is intentionally dumb. The mutation mechanism MUST be dumber than
++// the modified target (manifesto §II).
++
++#include "por_oracle.h"
++
++#include <cstring>
++
++#include "crypto/hash.h"
++
++namespace moire {
++
++double codebase_entropy(const codebase_snapshot& c, const por_weights& w) noexcept {
++  return w.w_brotli * static_cast<double>(c.brotli_size_bytes)
++       + w.w_ast    * static_cast<double>(c.ast_node_count)
++       + w.w_proof  * static_cast<double>(c.proof_size_bytes);
++}
++
++double reduction_rate(const codebase_snapshot& parent,
++                      const codebase_snapshot& child,
++                      uint64_t patch_size_bytes,
++                      const por_weights& w) noexcept {
++  if (patch_size_bytes == 0) return 0.0;
++  const double dH = codebase_entropy(parent, w) - codebase_entropy(child, w);
++  return dH / static_cast<double>(patch_size_bytes);
++}
++
++bool transition_predicate(double avg_reduction_rate,
++                          double avg_activity_score,
++                          double theta) noexcept {
++  return avg_reduction_rate > theta * avg_activity_score;
++}
++
++crypto::hash extend_cumulative_root(const crypto::hash& parent_root,
++                                    const crypto::hash& patch_blob_hash,
++                                    const codebase_snapshot& child) noexcept {
++  unsigned char buf[sizeof(crypto::hash) * 3 + sizeof(uint64_t) * 3];
++  unsigned char* q = buf;
++  std::memcpy(q, &parent_root, sizeof(crypto::hash));         q += sizeof(crypto::hash);
++  std::memcpy(q, &patch_blob_hash, sizeof(crypto::hash));     q += sizeof(crypto::hash);
++  std::memcpy(q, &child.root, sizeof(crypto::hash));          q += sizeof(crypto::hash);
++  std::memcpy(q, &child.brotli_size_bytes, sizeof(uint64_t)); q += sizeof(uint64_t);
++  std::memcpy(q, &child.ast_node_count, sizeof(uint64_t));    q += sizeof(uint64_t);
++  std::memcpy(q, &child.proof_size_bytes, sizeof(uint64_t));  q += sizeof(uint64_t);
++
++  crypto::hash h{};
++  crypto::cn_fast_hash(buf, sizeof(buf), h);
++  return h;
++}
++
++}  // namespace moire
+diff --git a/src/cryptonote_core/por_oracle.h b/src/cryptonote_core/por_oracle.h
+new file mode 100644
+index 0000000..e2e895d
+--- /dev/null
++++ b/src/cryptonote_core/por_oracle.h
+@@ -0,0 +1,51 @@
++// Moire — Proof-of-Reduction oracle.
++//
++// Pure header. The oracle computes H(C) and ΔH = H(C) - H(C ⊕ ΔC) where:
++//
++//   H(C) = w_brotli * Brotli11(canon(C))
++//        + w_ast    * AST_node_count(C)
++//        + w_proof  * |proof(C)|
++//
++// canon(C) excludes external/randomx, external/lmdb, build/.
++// Tree-sitter C++ grammar pinned by hash in genesis/toolchain.merkle.json.
++// Brotli pinned by hash in same.
++//
++// Behavioral-equivalence floor (constitution Article VI) is checked separately
++// in cryptonote_core::check_reduce_tx_admissible(); this header only computes H.
++
++#pragma once
++
++#include <cstdint>
++#include <string>
++#include <vector>
++
++#include "crypto/crypto.h"
++
++namespace moire {
++
++struct por_weights {
++  double w_brotli = 0.6;
++  double w_ast    = 0.3;
++  double w_proof  = 0.1;
++};
++
++struct codebase_snapshot {
++  crypto::hash root;                    // Merkle root of canon(C) at this height
++  uint64_t brotli_size_bytes = 0;       // Brotli-11 size of canon(C)
++  uint64_t ast_node_count = 0;          // tree-sitter AST node count over canon(C)
++  uint64_t proof_size_bytes = 0;        // length of proof artifacts at this height
++};
++
++double codebase_entropy(const codebase_snapshot& c, const por_weights& w) noexcept;
++double reduction_rate(const codebase_snapshot& parent,
++                      const codebase_snapshot& child,
++                      uint64_t patch_size_bytes,
++                      const por_weights& w) noexcept;
++bool transition_predicate(double avg_reduction_rate,
++                          double avg_activity_score,
++                          double theta = 2.0) noexcept;
++crypto::hash extend_cumulative_root(const crypto::hash& parent_root,
++                                    const crypto::hash& patch_blob_hash,
++                                    const codebase_snapshot& child) noexcept;
++
++}  // namespace moire

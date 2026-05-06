@@ -1,0 +1,118 @@
+diff --git a/src/cryptonote_core/CMakeLists.txt b/src/cryptonote_core/CMakeLists.txt
+index 5565aa1..794ec48 100644
+--- a/src/cryptonote_core/CMakeLists.txt
++++ b/src/cryptonote_core/CMakeLists.txt
+@@ -26,7 +26,9 @@
+ # STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
+ # THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ 
++# Moire: PoA oracle (patch 03)
+ set(cryptonote_core_sources
++  poa_oracle.cpp
+   blockchain.cpp
+   cryptonote_core.cpp
+   tx_pool.cpp
+diff --git a/src/cryptonote_core/poa_oracle.cpp b/src/cryptonote_core/poa_oracle.cpp
+new file mode 100644
+index 0000000..66ebead
+--- /dev/null
++++ b/src/cryptonote_core/poa_oracle.cpp
+@@ -0,0 +1,60 @@
++// Moire — Proof-of-Activity oracle implementation.
++#include "poa_oracle.h"
++
++#include <algorithm>
++#include <cstring>
++
++#include "common/util.h"
++#include "crypto/hash.h"
++
++namespace moire {
++
++static inline double clamp01(double x) noexcept {
++  return std::max(0.0, std::min(1.0, x));
++}
++
++double activity_score(const activity_window& w, const poa_params& p) noexcept {
++  const double v_tx =
++      w.fee_target_atomic == 0
++          ? 0.0
++          : clamp01(static_cast<double>(w.fee_burnt_atomic) /
++                    static_cast<double>(w.fee_target_atomic));
++  const double r_contrib =
++      w.reduce_tx_target == 0
++          ? 0.0
++          : clamp01(static_cast<double>(w.reduce_tx_count) /
++                    static_cast<double>(w.reduce_tx_target));
++  const double p_stake =
++      w.stake_weight_max == 0.0
++          ? 0.0
++          : clamp01(w.stake_weight / w.stake_weight_max);
++
++  const double a = p.alpha * v_tx + p.beta * r_contrib + p.gamma * p_stake;
++  return std::max(p.epsilon, std::min(1.0, a));
++}
++
++poa_params poa_params_post_transition(const poa_params& p) noexcept {
++  poa_params q = p;
++  q.alpha = 0.0;
++  q.gamma = 0.0;
++  return q;
++}
++
++crypto::hash activity_ledger_hash(const activity_window& w) noexcept {
++  unsigned char buf[sizeof(uint64_t) * 4 + sizeof(uint32_t) * 2 + sizeof(double) * 2];
++  unsigned char* q = buf;
++  std::memcpy(q, &w.height_lo, sizeof(uint64_t));         q += sizeof(uint64_t);
++  std::memcpy(q, &w.height_hi, sizeof(uint64_t));         q += sizeof(uint64_t);
++  std::memcpy(q, &w.fee_burnt_atomic, sizeof(uint64_t));  q += sizeof(uint64_t);
++  std::memcpy(q, &w.fee_target_atomic, sizeof(uint64_t)); q += sizeof(uint64_t);
++  std::memcpy(q, &w.reduce_tx_count, sizeof(uint32_t));   q += sizeof(uint32_t);
++  std::memcpy(q, &w.reduce_tx_target, sizeof(uint32_t));  q += sizeof(uint32_t);
++  std::memcpy(q, &w.stake_weight, sizeof(double));        q += sizeof(double);
++  std::memcpy(q, &w.stake_weight_max, sizeof(double));    q += sizeof(double);
++
++  crypto::hash h{};
++  crypto::cn_fast_hash(buf, sizeof(buf), h);
++  return h;
++}
++
++}  // namespace moire
+diff --git a/src/cryptonote_core/poa_oracle.h b/src/cryptonote_core/poa_oracle.h
+new file mode 100644
+index 0000000..d5a5a93
+--- /dev/null
++++ b/src/cryptonote_core/poa_oracle.h
+@@ -0,0 +1,32 @@
++// Moire — Proof-of-Activity oracle.
++// Pure function over the rolling 720-block activity ledger. State lives in blockchain_db.
++#pragma once
++
++#include <cstdint>
++#include "crypto/crypto.h"
++
++namespace moire {
++
++struct poa_params {
++  double alpha   = 0.5;   // V_tx weight
++  double beta    = 0.4;   // R_contrib weight
++  double gamma   = 0.1;   // P_stake weight
++  double epsilon = 1e-6;  // activity floor
++};
++
++struct activity_window {
++  uint64_t height_lo;        // inclusive
++  uint64_t height_hi;        // inclusive (window end)
++  uint64_t fee_burnt_atomic; // sum of burnt fees over window (attomoire)
++  uint64_t fee_target_atomic;// genesis: 1 MOI/block * window_len
++  uint32_t reduce_tx_count;  // accepted reduce(ΔC) txs in window
++  uint32_t reduce_tx_target; // genesis-tunable cap, default 4 in 720
++  double   stake_weight;     // sum of stake-weighted attestation weights
++  double   stake_weight_max; // genesis: registry sum
++};
++
++double activity_score(const activity_window& w, const poa_params& p) noexcept;
++struct poa_params poa_params_post_transition(const poa_params& p) noexcept;
++crypto::hash activity_ledger_hash(const activity_window& w) noexcept;
++
++}  // namespace moire
