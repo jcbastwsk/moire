@@ -2,7 +2,7 @@
 
 **To:** Hermes (M4, full toolchain)
 **From:** Day-1 sandbox session
-**Project root:** `~/.hermes/Projects/distill/`
+**Project root:** `~/Projects/moire/`
 **Baseline:** `monero-project/monero@c182abb` (master, 2026-05-06)
 
 ---
@@ -17,7 +17,7 @@ have the machine; this sandbox does not.
 ## Pickup prompt for Hermes
 
 > You are Hermes on the M4. The Day-1 sandbox session at
-> `~/.hermes/Projects/distill/` has produced:
+> `~/Projects/moire/` has produced:
 > - `DESIGN.md` — full architecture and invariants.
 > - `constitution.md` — the on-chain monetary constitution.
 > - `diff/01..07.patch` — applicable unified diffs against `monero@c182abb`.
@@ -134,7 +134,7 @@ core code.
 
 ## Communication
 
-- All work product → `~/.hermes/Projects/distill/`.
+- All work product → `~/Projects/moire/`.
 - Append findings to `BUILD_LOG.md`. Day-1 ledger entry seeded.
 - New patches → `diff/` with sequential numbering (`02b-sweep.patch`,
   `08-testnet-genesis.patch`, …).

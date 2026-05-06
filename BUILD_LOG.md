@@ -215,4 +215,79 @@ are intentionally preserved per the original location lock).
 
 ---
 
+---
+
+## 2026-05-06T03:00Z — Day-1 sandbox session — Project relocation: ~/.hermes/Projects/distill/ → ~/Projects/moire/
+
+**Agent:** Day-1 sandbox.
+**Operator directive:** "I do want all hermes projects in the main home folder Projects folder and synced".
+
+### What moved
+
+Entire project tree (excluding the `monero-ref/.git/` orphan that the FUSE
+mount couldn't delete) copied from `~/.hermes/Projects/distill/` to
+`~/Projects/moire/`. New canonical project root: **`~/Projects/moire/`**.
+
+The old `~/.hermes/Projects/<name>/` convention is deprecated for all
+Hermes projects going forward — see `docs/project_layout.md`.
+
+### Git repo initialized
+
+`git init -b main` at the new root. Initial commit `d7d603d`:
+
+> Day-1 Moire scaffold
+
+`.gitignore` covers build artifacts, OS cruft, and the cloned baseline
+source (`monero-src/`). The toolchain manifest IS committed; the real
+hashes that Hermes populates ride on subsequent commits.
+
+### Sync mechanism
+
+`scripts/sync.sh` provides:
+
+| Command | Action |
+|---|---|
+| `./scripts/sync.sh init <url>` | one-time: set the remote URL |
+| `./scripts/sync.sh` | pull then push (default) |
+| `./scripts/sync.sh push` | push only |
+| `./scripts/sync.sh pull` | pull only |
+| `./scripts/sync.sh status` | ahead/behind + dirty |
+
+Provider-agnostic: the operator picks GitHub / Gitea / Codeberg /
+self-hosted on a per-project basis. No remote is set yet — the operator
+runs `init <url>` once when they decide.
+
+Multi-machine sync (M4 ↔ canary nodes ↔ build farm) is via clone-and-pull;
+git is the protocol.
+
+### Convention doc
+
+`docs/project_layout.md` written to fix the new convention:
+
+- All projects in `~/Projects/<name>/`, lowercase, hyphenated.
+- Standard skeleton: README, DESIGN, BUILD_LOG, HERMES_HANDOFF, roadmap,
+  scripts/sync.sh, docs/, notes/, plus project-specific dirs.
+- One git repo per project, one remote, branch `main`.
+- `BUILD_LOG.md` is append-only; merge conflicts mean two agents wrote at
+  once and resolution is concatenation.
+
+### Old location
+
+`~/.hermes/Projects/distill/` still exists. Operator can delete it once
+they verify the new location has everything. The orphan `monero-ref/.git/`
+inside it could not be removed from the sandbox due to FUSE EPERM; on the
+host it's a one-line `rm -rf`.
+
+A breadcrumb at `~/.hermes/Projects/distill/MOVED.md` will be added in
+the next bash pass to redirect anything still looking there.
+
+### Other Hermes projects on this machine
+
+Confirmed under `~/Projects/`: `all-hands`, `crypto-games`, `dewey`,
+`hermes-dashboard`, `hyperframes-cinematic-demo`, `pit`, `research`,
+`youtube`, plus a `domains` and `fortnite` and `gta-rp`. The `~/Projects/distill/`
+shell at the host's `~/Projects/` is now redundant; operator can delete.
+
+---
+
 ## (Hermes appends from here)
