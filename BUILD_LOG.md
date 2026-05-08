@@ -358,3 +358,90 @@ tree still cannot be removed from the sandbox (FUSE EPERM); operator can
 ---
 
 ## (Hermes appends from here)
+
+---
+
+## 2026-05-08T17:34Z — Hermes host session — Build bring-up started
+
+**Agent:** Hermes on host.
+**Objective:** Start Session 2 / patch-02b bring-up: run `build.sh`, make the patch stack reproducible, and reach the first real compile failures.
+
+### Pre-existing Day-2 work landed
+
+Found a staged Day-2 sandbox handoff in the index plus `notes/day2_pending_commit.md`. Verified with:
+
+```bash
+uvx --with hypothesis --with pycryptodome --from pytest pytest tests/ -q
+```
+
+Result: **74 passed**. Also verified `genesis/golden_vectors.json` `self_sha256`.
+
+Committed and pushed:
+
+```text
+d070520 Day-2: oracle ref impl + 5 invariants + golden vectors; promote canonical
+```
+
+### Host dependencies installed
+
+Installed missing build dependencies via Homebrew:
+
+```text
+cmake boost libsodium pkg-config zeromq miniupnpc expat libpgm hidapi protobuf ccache
+```
+
+### Build harness fixes
+
+`build.sh` had three host bring-up blockers before reaching the intended C++ sweep:
+
+1. `SRC` was read by the Python source-hash step before it was exported.
+2. Re-running the script failed because `git reset --hard` left untracked files created by prior patch attempts; added `git clean -fd` inside `monero-src` before patch replay.
+3. Fresh clone lacked submodules; added `git submodule update --init --force`.
+4. Trezor/device support was still probed even though Moire excises Trezor privacy paths; configure now passes `-DUSE_DEVICE_TREZOR=OFF`.
+
+### Patch stack fix
+
+`diff/01-rename.patch` renamed `project(monero)` to `project(moire)`, which made CMake variable `monero_SOURCE_DIR` empty in `cmake/CheckLinkerFlag.cmake`. Added the corresponding rename to `moire_SOURCE_DIR`.
+
+### Verified progress
+
+After those fixes, `build.sh` now:
+
+- clones/checks out `monero@c182abb`,
+- initializes submodules,
+- applies patches `01..07` cleanly,
+- computes the toolchain leaf,
+- computes `canon(C)` source hash,
+- configures CMake successfully,
+- starts compiling.
+
+Current source hash after patch replay:
+
+```text
+19dfc8bfe8e9ce6718dcf627c92c101ac2df04846f325894040867b266d9e612
+```
+
+### Current true blocker
+
+The build now fails in the expected patch-02b zone: remaining consumers of deleted RingCT/device code.
+
+First compile layer:
+
+```text
+src/cryptonote_basic/cryptonote_basic.h: fatal error: 'ringct/rctTypes.h' file not found
+src/device/device.hpp: fatal error: 'ringct/rctTypes.h' file not found
+```
+
+A focused local sweep identified the next clusters:
+
+- `cryptonote_basic.h`: missing `txin_reduce` `VARIANT_TAG`s; stale `txout_to_tagged_key`, `rct_signatures`, and `key_offsets` references.
+- `account.h` / `account.cpp`: device API still assumes full `hw::device` and `hw::get_device` from `device/device.hpp`.
+- `device/*`: public device API still exposes RingCT/MLSAG/CLSAG methods.
+- `blockchain_db/*`: output DB still stores `rct::key commitment` and `add_output(..., const rct::key*)`.
+- `rpc/*`: RPC structs still expose RingCT `mask` fields and include `ringct/rctSigs.h`.
+- `cryptonote_tx_utils.*`: transaction construction still includes `ringct/rctOps.h`, `rct::ctkey`, `RCTConfig`, ring offsets, view tags.
+- `wallet2.*`: large remaining RingCT/multisig/ringdb surface.
+
+### Status
+
+Patch replay/configure is now reproducible. Full `moired` / `moire-wallet-cli` compile is **not yet green**; the next commit must be the actual `diff/02b-sweep.patch` transparent-UTXO consumer sweep.

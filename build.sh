@@ -22,6 +22,7 @@ BUILD="$ROOT/build/release"
 GENESIS="$ROOT/genesis"
 DIFFS="$ROOT/diff"
 BASELINE_REV="${BASELINE_REV:-c182abb}"   # monero@master at fork moment
+export SRC
 
 # ---- 1. Source preparation -------------------------------------------------
 if [ ! -d "$SRC" ]; then
@@ -32,7 +33,10 @@ fi
 
 if [ -z "${SKIP_PATCH_APPLY:-}" ]; then
   echo "[2/6] Applying Moire patches 01..07"
-  ( cd "$SRC" && git reset --hard "$BASELINE_REV" )
+  # Reset tracked files and remove untracked files created by prior patch attempts.
+  # Without git clean, re-running this script fails when patches add files that
+  # remain untracked after git reset --hard.
+  ( cd "$SRC" && git reset --hard "$BASELINE_REV" && git clean -fd && git submodule update --init --force )
   for p in "$DIFFS"/0*.patch; do
     echo "  applying $(basename "$p")"
     ( cd "$SRC" && git apply --check "$p" && git apply "$p" )
@@ -100,6 +104,7 @@ cmake "$SRC" \
   -DCMAKE_BUILD_TYPE=Release \
   -DSTATIC=ON \
   -DBUILD_TESTS=ON \
+  -DUSE_DEVICE_TREZOR=OFF \
   -DMOIRE_DETERMINISTIC_BUILD=ON
 cmake --build . --parallel "$(nproc 2>/dev/null || sysctl -n hw.ncpu || echo 4)"
 

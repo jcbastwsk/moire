@@ -11,6 +11,19 @@ index 90cf7e9..c3ee046 100644
  
  option (USE_CCACHE "Use ccache if a usable instance is found" ON)
  if (USE_CCACHE)
+diff --git a/cmake/CheckLinkerFlag.cmake b/cmake/CheckLinkerFlag.cmake
+index 69eefe810..d3046273e 100644
+--- a/cmake/CheckLinkerFlag.cmake
++++ b/cmake/CheckLinkerFlag.cmake
+@@ -6,7 +6,7 @@ macro(CHECK_LINKER_FLAG flag VARIABLE)
+       message(STATUS "Looking for ${flag} linker flag")
+     endif()
+ 
+-    set(_cle_source ${monero_SOURCE_DIR}/cmake/CheckLinkerFlag.c)
++    set(_cle_source ${moire_SOURCE_DIR}/cmake/CheckLinkerFlag.c)
+ 
+     set(saved_CMAKE_C_FLAGS ${CMAKE_C_FLAGS})
+     set(CMAKE_C_FLAGS "${flag}")
 diff --git a/README.md b/README.md
 index b4b5213..f213abc 100644
 --- a/README.md
