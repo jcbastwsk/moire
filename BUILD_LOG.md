@@ -215,78 +215,145 @@ are intentionally preserved per the original location lock).
 
 ---
 
+## 2026-05-06T21:49Z — Day-2 sandbox session — Oracle ref impl + invariant suite + golden vectors
+
+**Agent:** Day-2 sandbox (operator: jcb).
+**Canonical path:** `~/Projects/moire/` (operator promoted in mid-session;
+see Day-2 path-promotion entry below). Day-2 work was authored against the
+deprecated `~/.hermes/Projects/distill/` mirror, then auto-synced and
+committed here.
+**Project name:** Operator's task brief used "Distill"; on-disk artifacts
+are "Moire" per the Day-1 rename. Honoring the rename. Vocabulary in this
+entry follows the locked invariants (Distill ≡ Moire ≡ this codebase).
+**Outcome:** Oracle Python references + invariant suite + golden-vector file
+shipped. **74/74 tests pass.** Patches 01-07 unmodified (sha256 verified).
+
+### Shipped
+
+| Path | LOC | Purpose |
+|---|---:|---|
+| `tests/oracles/crypto.py`             |  53 | Keccak-256 + Merkle-pairwise, mirrors `crypto::cn_fast_hash`. |
+| `tests/oracles/poa.py`                |  76 | Python ref of `src/cryptonote_core/poa_oracle.{h,cpp}`. |
+| `tests/oracles/por.py`                |  77 | Python ref of `src/cryptonote_core/por_oracle.{h,cpp}`. |
+| `tests/oracles/emission.py`           |  63 | R(n) = k·pivot·exp(-λn) + closed-form/discrete supply. |
+| `tests/oracles/reduce.py`             | 175 | `txin_reduce` codec + canary state machine. |
+| `tests/invariants/test_block_reward.py`         |  72 | Property-1: reward formula. |
+| `tests/invariants/test_transition_predicate.py` |  82 | Property-2: monotonicity. |
+| `tests/invariants/test_hard_cap.py`             | 105 | Property-3: cap bound (with discrete-overshoot doc). |
+| `tests/invariants/test_reduce_tx_roundtrip.py`  | 144 | Property-4: txin_reduce roundtrip + sig-hash sensitivity. |
+| `tests/invariants/test_cumulative_root.py`      | 113 | Property-5: Merkle root correctness + reorder sensitivity. |
+| `tests/oracle_unit/test_poa.py`                 | 100 | PoA oracle units. |
+| `tests/oracle_unit/test_por.py`                 |  72 | PoR oracle units. |
+| `tests/oracle_unit/test_reduce.py`              |  62 | Canary state-machine units. |
+| `tests/oracle_unit/test_golden_vectors.py`      |  98 | Re-derives every golden vector from refs. |
+| `tests/gen_golden_vectors.py`                   | 187 | Vector generator (idempotent). |
+| `tests/conftest.py`                             |  10 | Path setup. |
+| `genesis/golden_vectors.json`                   | n/a | self-sha256 sealed; Hermes M4 unit-test target. |
+
+### Test results
+
+```
+74 passed in 0.62s
+```
+
+### Patch ledger sanity
+
+All 7 patch sha256 prefixes match Day-1 rename ledger above (lines 192-198).
+Re-verified line counts: 901 / 19,915 / 118 / 137 / 31 / 120 / 205. Clean.
+
+### Findings — surfaced by the test suite
+
+1. **Discrete-vs-continuous cap discrepancy.** λ at genesis was solved against
+   the integral form `S(∞) = k/λ`. Per-block emission is discrete, so the
+   true asymptotic ceiling is `k/(1-exp(-λ))`. Relative overshoot ≈ λ/2
+   ≈ 1.78×10⁻⁷ — about **3.74 MOI on the 21 M MOI cap**. Two clean fixes:
+   (a) re-solve λ to satisfy the discrete cap exactly, OR
+   (b) explicitly redefine `S(∞) := k/(1-exp(-λ))` in constitution.md
+       Article II and re-run the year-16 sanity check.
+   Pinned in `tests/invariants/test_hard_cap.py::test_discrete_asymptotic_cap_overshoot_documented`
+   so any future λ change keeps overshoot < 1e-5 relative.
+2. **txin_reduce signature scope.** `admissibility_input_hash` covers all 7
+   non-signature fields (parent, child, patch, Δ, pubkey, stake, canary).
+   Hermes M4 must wire `crypto::generate_signature` over this exact byte
+   sequence. The Python reference encodes the canonical layout; golden
+   vector `reduce_tx[0]` pins both the wire blob and the sig-input hash.
+3. **Merkle rule.** `merkle_root_pairwise([])` returns 32 zero bytes;
+   single-leaf returns the leaf as-is; odd layers duplicate the last
+   leaf. C++ side must match exactly for `cumulative_reduction_root`
+   verification to be portable. Pinned in golden vectors §merkle.
+
+### Hermes M4 hand-off
+
+The C++ unit tests on M4 should:
+1. Read `genesis/golden_vectors.json` at compile time.
+2. For each `block_reward[i]`: assert `core::get_block_reward(n, pivot)` matches.
+3. For each `poa[i]`: assert `moire::activity_score()` and `activity_ledger_hash()` match (binary-identical).
+4. For each `por[i]`: assert `codebase_entropy()`, `transition_predicate()`, and the chain extension match.
+5. For each `reduce_tx[i]`: deserialize `wire_blob_hex`, re-serialize, assert byte equality. Compute `admissibility_input_hash` and assert match.
+6. For each `canary[i]`: build `reduce_tx_state` per the fixture and assert `reduce_tx_promotable()` matches.
+7. For each `merkle[i]`: build leaves `cn_fast_hash("leaf-{i}")` and assert root match.
+8. Verify `self_sha256` of the file using sha256 of `json.dumps(payload-without-self_sha256, indent=2, sort_keys=True)`.
+
+### What didn't ship today (still queued)
+
+- C++ ports of the 5 invariants (Hermes M4: cmocka or gtest).
+- `diff/02b-sweep.patch` cross-file RingCT call-site sweep.
+- Compile pass.
+- `tests/01-excise-privacy.patch` — the test-corpus excision (we wrote
+  invariants TOP-DOWN instead; bottom-up Monero test deletion still pending).
+- LMDB column wiring.
+
+### Blockers
+
+1. **~~Path-layout divergence~~** — RESOLVED in the Day-2 path-promotion
+   entry below. `~/Projects/moire/` is canonical.
+2. **Genesis λ recompute.** See finding (1) above. Two-line fix in
+   `genesis/derivation.md` + new pinned λ in `genesis/params.toml`. Either
+   pick (a) re-solve λ to satisfy the discrete cap, or (b) redefine
+   `S(∞) := k/(1-exp(-λ))` in the constitution. Next session executes.
+
 ---
 
-## 2026-05-06T03:00Z — Day-1 sandbox session — Project relocation: ~/.hermes/Projects/distill/ → ~/Projects/moire/
+## 2026-05-07T02:08Z — Day-2 sandbox session — Path promotion: ~/Projects/moire/ canonical
 
-**Agent:** Day-1 sandbox.
-**Operator directive:** "I do want all hermes projects in the main home folder Projects folder and synced".
+**Agent:** Day-2 sandbox.
+**Operator directive:** "Yes make the projects folder one the new canonical path."
 
-### What moved
+### Decision
 
-Entire project tree (excluding the `monero-ref/.git/` orphan that the FUSE
-mount couldn't delete) copied from `~/.hermes/Projects/distill/` to
-`~/Projects/moire/`. New canonical project root: **`~/Projects/moire/`**.
+`~/Projects/moire/` is now the **canonical** project root. The previous
+location `~/.hermes/Projects/distill/` is a deprecated mirror and should
+not receive new writes. The autosync pipeline that mirrored sandbox edits
+into `~/Projects/moire/` did the heavy lifting; this entry pins the
+decision in the ledger.
 
-The old `~/.hermes/Projects/<name>/` convention is deprecated for all
-Hermes projects going forward — see `docs/project_layout.md`.
+### Reconciled
 
-### Git repo initialized
+- Synced the two stragglers `tests/.gitignore` and `tests/README.md` from
+  the deprecated mirror into the canonical tree.
+- Stripped the `Path lock: ~/.hermes/Projects/distill/` line from the
+  Day-2 BUILD_LOG header above; replaced with a canonical-path note.
+- Updated `tests/README.md` cd-path to `~/Projects/moire`.
+- Verified `pytest tests/ -q` from the canonical tree: **74 passed in 0.71s**.
+- Verified all 7 patch sha256 prefixes still match the Day-1 ledger.
+- Verified `genesis/golden_vectors.json` `self_sha256` re-derivation matches.
 
-`git init -b main` at the new root. Initial commit `d7d603d`:
+### Future-session note
 
-> Day-1 Moire scaffold
+The scheduled task file (`SKILL.md`) still contains the line
+`PATH NOTE — canonical project root is ~/.hermes/Projects/distill/. Do
+NOT write to ~/Projects/.` That language is now stale. Operator should
+edit the scheduled task to read `canonical project root is ~/Projects/moire/`
+before the next automated run, or future autoruns will land in the
+deprecated mirror again. (The sandbox cannot edit the task file directly —
+it lives in the user's macOS Application Support uploads folder.)
 
-`.gitignore` covers build artifacts, OS cruft, and the cloned baseline
-source (`monero-src/`). The toolchain manifest IS committed; the real
-hashes that Hermes populates ride on subsequent commits.
+### Tombstone
 
-### Sync mechanism
-
-`scripts/sync.sh` provides:
-
-| Command | Action |
-|---|---|
-| `./scripts/sync.sh init <url>` | one-time: set the remote URL |
-| `./scripts/sync.sh` | pull then push (default) |
-| `./scripts/sync.sh push` | push only |
-| `./scripts/sync.sh pull` | pull only |
-| `./scripts/sync.sh status` | ahead/behind + dirty |
-
-Provider-agnostic: the operator picks GitHub / Gitea / Codeberg /
-self-hosted on a per-project basis. No remote is set yet — the operator
-runs `init <url>` once when they decide.
-
-Multi-machine sync (M4 ↔ canary nodes ↔ build farm) is via clone-and-pull;
-git is the protocol.
-
-### Convention doc
-
-`docs/project_layout.md` written to fix the new convention:
-
-- All projects in `~/Projects/<name>/`, lowercase, hyphenated.
-- Standard skeleton: README, DESIGN, BUILD_LOG, HERMES_HANDOFF, roadmap,
-  scripts/sync.sh, docs/, notes/, plus project-specific dirs.
-- One git repo per project, one remote, branch `main`.
-- `BUILD_LOG.md` is append-only; merge conflicts mean two agents wrote at
-  once and resolution is concatenation.
-
-### Old location
-
-`~/.hermes/Projects/distill/` still exists. Operator can delete it once
-they verify the new location has everything. The orphan `monero-ref/.git/`
-inside it could not be removed from the sandbox due to FUSE EPERM; on the
-host it's a one-line `rm -rf`.
-
-A breadcrumb at `~/.hermes/Projects/distill/MOVED.md` will be added in
-the next bash pass to redirect anything still looking there.
-
-### Other Hermes projects on this machine
-
-Confirmed under `~/Projects/`: `all-hands`, `crypto-games`, `dewey`,
-`hermes-dashboard`, `hyperframes-cinematic-demo`, `pit`, `research`,
-`youtube`, plus a `domains` and `fortnite` and `gta-rp`. The `~/Projects/distill/`
-shell at the host's `~/Projects/` is now redundant; operator can delete.
+`~/.hermes/Projects/distill/MOVED.md` was already the breadcrumb. It's
+preserved. The orphaned `monero-ref/.git/` skeleton inside the deprecated
+tree still cannot be removed from the sandbox (FUSE EPERM); operator can
+`rm -rf ~/.hermes/Projects/distill/` from the host shell at any time.
 
 ---
 

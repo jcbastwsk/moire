@@ -10,7 +10,7 @@ constitution does not move.
 |---|---|---|---|
 | 1 | Day-1 design + 7-patch scaffold | Sandbox | DESIGN, constitution, diff/01..07, genesis/, build.sh, HERMES_HANDOFF, roadmap, BUILD_LOG. **DONE.** |
 | 2 | Patch-02b cross-file RingCT sweep | Hermes (M4) | `diff/02b-sweep.patch`. `cmake --build` succeeds for `moired`, `moire-wallet-cli`. |
-| 3 | Test-corpus excision + invariants seed | Hermes (M4) | `tests/01-excise-privacy.patch`, `tests/invariants/` with first 5 properties (block_reward formula, transition_predicate monotonicity, hard_cap bound, `txin_reduce` round-trip, `cumulative_reduction_root` Merkle correctness). `genesis/test_corpus.sha256` pinned. |
+| 3 | Test-corpus excision + invariants seed | Hermes (M4) + sandbox | **Python ref + 5 invariants + golden vectors shipped Day-2 (74/74 pass).** Hermes M4 still owes: (a) `tests/01-excise-privacy.patch` deletion of Monero ring-sig/RingCT/multisig tests, (b) C++ port of the 5 invariants under Monero's existing test framework, (c) `genesis/test_corpus.sha256`, (d) decision on the discrete-cap λ recompute (see Day-2 BUILD_LOG finding 1). |
 | 4 | Single-node testnet bring-up | Hermes (M4) | `moired --regtest` mines 100 blocks; `R(n)` matches Article II within 1 attomoire; emit `BUILD_LOG` entry with first-100-block trace. |
 | 5 | Multi-node testnet (3 peers) | Hermes (M4) | 3 daemons sync; first peer-broadcast `txin_reduce` tx; canary state machine ticks. |
 
